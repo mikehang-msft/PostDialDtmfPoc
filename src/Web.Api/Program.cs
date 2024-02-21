@@ -1,3 +1,4 @@
+using Azure.Communication;
 using Azure.Communication.CallAutomation;
 using Azure.Communication.Rooms;
 using Azure.Messaging;
@@ -33,22 +34,41 @@ app.MapGet("api/callbacks", async (CloudEvent[] events, CallAutomationClient cli
 {
     CallAutomationEventBase eventBase = CallAutomationEventParser.Parse(events.FirstOrDefault());
 
-    if (eventBase is CallConnected callConnected)
+    if (eventBase is CallConnected)
     {
         // place outbound PSTN call
+        var target = new PhoneNumberIdentifier("");
+        var callerId = new PhoneNumberIdentifier("");
+        var callInvite = new CallInvite(target, callerId);
+        await client.GetCallConnection(eventBase.CallConnectionId).AddParticipantAsync(callInvite);
+    }
+
+    if (eventBase is AddParticipantSucceeded)
+    {
+        // send DTMF tones to PSTN participant
+        var target = new PhoneNumberIdentifier("");
+        var tones = new List<DtmfTone>()
+        {
+            DtmfTone.One,
+            DtmfTone.Two,
+            DtmfTone.Three,
+            DtmfTone.Four,
+        };
+        var sendDtmfTonesOptions = new SendDtmfTonesOptions(tones, target);
+        await client.GetCallConnection(eventBase.CallConnectionId).GetCallMedia().SendDtmfTonesAsync(sendDtmfTonesOptions);
     }
 });
 
-app.MapPost("api/room", async (RoomsClient roomsClient) =>
+app.MapPost("api/room", async (IEnumerable<RoomParticipant>? participants, RoomsClient roomsClient) =>
 {
-    CommunicationRoom room = await roomsClient.CreateRoomAsync();
-    return room;
+    CommunicationRoom room = await roomsClient.CreateRoomAsync(null, null, participants);
+    return Results.Ok(room);
 });
 
 app.MapPost("api/room/participants", async (string roomId, IEnumerable<RoomParticipant> participants, RoomsClient roomsClient) =>
 {
     var response = await roomsClient.AddOrUpdateParticipantsAsync(roomId, participants);
-    return response;
+    return Results.Ok(response);
 });
 
 app.Run();

@@ -12,10 +12,14 @@ public class AnswerCallWorker : BackgroundService
 {
     private readonly AzureStorageQueueClient _azureStorageQueueClient;
     private readonly CallAutomationClient _callAutomationClient;
-    private readonly CallbackConfiguration _callbackConfiguration;
+    private readonly CallingConfiguration _callbackConfiguration;
     private readonly ILogger<AnswerCallWorker> _logger;
 
-    public AnswerCallWorker(IQueueClientFactory queueClientFactory, CallAutomationClient callAutomationClient, CallbackConfiguration callbackConfiguration, ILogger<AnswerCallWorker> logger)
+    public AnswerCallWorker(
+        IQueueClientFactory queueClientFactory,
+        CallAutomationClient callAutomationClient,
+        CallingConfiguration callbackConfiguration,
+        ILogger<AnswerCallWorker> logger)
     {
         _azureStorageQueueClient = queueClientFactory.GetQueueClient();
         _callAutomationClient = callAutomationClient;
@@ -25,6 +29,8 @@ public class AnswerCallWorker : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        _logger.LogInformation("Starting answer call worker...");
+        
         while (!stoppingToken.IsCancellationRequested)
         {
             await _azureStorageQueueClient.ReceiveMessagesAsync<CloudEvent>(HandleMessage, HandleException);

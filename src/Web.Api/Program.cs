@@ -2,6 +2,7 @@ using Azure.Communication;
 using Azure.Communication.CallAutomation;
 using Azure.Communication.Rooms;
 using Azure.Messaging;
+using JasonShave.AzureStorage.QueueService.Extensions;
 using Web.Api;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -15,10 +16,18 @@ builder.Services.AddSingleton(new CallAutomationClient(builder.Configuration["Ac
 builder.Services.AddSingleton(new RoomsClient(builder.Configuration["Acs:ConnectionString"]));
 
 var callbackHost = $"{builder.Configuration["Acs:CallbackUri"] ?? builder.Configuration["VS_TUNNEL_URL"]} + /api/callbacks";
-builder.Services.AddSingleton(new CallbackConfiguration()
+builder.Services.AddSingleton(new CallingConfiguration()
 {
     CallbackUri = new Uri(callbackHost),
+    Target = builder.Configuration["PhoneNumbers:Target"],
+    CallerId = builder.Configuration["PhoneNumbers:CallerId"],
 });
+
+builder.Services.AddAzureStorageQueueClient(x => x.AddDefaultClient(y => 
+{
+    y.ConnectionString = builder.Configuration["Storage:ConnectionString"];
+    y.QueueName = "events-incomingcall";
+}));
 
 var app = builder.Build();
 

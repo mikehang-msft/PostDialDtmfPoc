@@ -1,5 +1,8 @@
 ﻿
+using System.Text.Json;
+using Azure.Communication.CallAutomation;
 using Azure.Messaging;
+using CallAutomation.Contracts;
 using JasonShave.AzureStorage.QueueService.Interfaces;
 using JasonShave.AzureStorage.QueueService.Services;
 
@@ -8,10 +11,12 @@ namespace Web.Api;
 public class AnswerCallWorker : BackgroundService
 {
     private readonly AzureStorageQueueClient _azureStorageQueueClient;
+    private readonly CallAutomationClient _callAutomationClient;
 
-    public AnswerCallWorker(IQueueClientFactory queueClientFactory)
+    public AnswerCallWorker(IQueueClientFactory queueClientFactory, CallAutomationClient callAutomationClient)
     {
         _azureStorageQueueClient = queueClientFactory.GetQueueClient();
+        _callAutomationClient = callAutomationClient;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -25,11 +30,13 @@ public class AnswerCallWorker : BackgroundService
 
     private async ValueTask HandleMessage(CloudEvent? cloudEvent)
     {
-
+        var incomingCall = JsonSerializer.Deserialize<IncomingCall>(cloudEvent?.Data);
+        var answerCallOptions = new AnswerCallOptions(incomingCall?.IncomingCallContext, new Uri());
+        await _callAutomationClient.AnswerCallAsync(answerCallOptions);
     }
 
-    private async ValueTask HandleException(Exception exception)
+    private ValueTask HandleException(Exception exception)
     {
-        
+        return ValueTask.CompletedTask;
     }
 }

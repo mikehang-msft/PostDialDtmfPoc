@@ -12,11 +12,13 @@ public class AnswerCallWorker : BackgroundService
 {
     private readonly AzureStorageQueueClient _azureStorageQueueClient;
     private readonly CallAutomationClient _callAutomationClient;
+    private readonly CallbackConfiguration _callbackConfiguration;
 
-    public AnswerCallWorker(IQueueClientFactory queueClientFactory, CallAutomationClient callAutomationClient)
+    public AnswerCallWorker(IQueueClientFactory queueClientFactory, CallAutomationClient callAutomationClient, CallbackConfiguration callbackConfiguration)
     {
         _azureStorageQueueClient = queueClientFactory.GetQueueClient();
         _callAutomationClient = callAutomationClient;
+        _callbackConfiguration = callbackConfiguration;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -31,7 +33,7 @@ public class AnswerCallWorker : BackgroundService
     private async ValueTask HandleMessage(CloudEvent? cloudEvent)
     {
         var incomingCall = JsonSerializer.Deserialize<IncomingCall>(cloudEvent?.Data);
-        var answerCallOptions = new AnswerCallOptions(incomingCall?.IncomingCallContext, new Uri());
+        var answerCallOptions = new AnswerCallOptions(incomingCall?.IncomingCallContext, _callbackConfiguration.CallbackUri);
         await _callAutomationClient.AnswerCallAsync(answerCallOptions);
     }
 

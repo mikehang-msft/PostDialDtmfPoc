@@ -43,7 +43,7 @@ public class AnswerCallWorker : BackgroundService
         var incomingCall = JsonSerializer.Deserialize<IncomingCall>(cloudEvent?.Data);
         var answerCallOptions = new AnswerCallOptions(incomingCall?.IncomingCallContext, _callbackConfiguration.CallbackUri);
         
-        _logger.LogInformation("Answering call with callback URI {callbackUri}", answerCallOptions.CallbackUri.AbsoluteUri);
+        _logger.LogInformation("Answering call with callback URI {callbackUri} and correlationID: {correlationId}", answerCallOptions.CallbackUri.AbsoluteUri, incomingCall?.CorrelationId);
         
         await _callAutomationClient.AnswerCallAsync(answerCallOptions);
     }

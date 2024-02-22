@@ -38,7 +38,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
-app.MapPost("api/callbacks", async (CloudEvent[] events, CallAutomationClient client, CallingConfiguration callingConfiguration) =>
+app.MapPost("api/callbacks", async (CloudEvent[] events, CallAutomationClient client, CallingConfiguration callingConfiguration, ILogger<Program> logger) =>
 {
     CallAutomationEventBase eventBase = CallAutomationEventParser.Parse(events.FirstOrDefault());
 
@@ -48,6 +48,9 @@ app.MapPost("api/callbacks", async (CloudEvent[] events, CallAutomationClient cl
         var target = new PhoneNumberIdentifier(callingConfiguration.Target);
         var callerId = new PhoneNumberIdentifier(callingConfiguration.CallerId);
         var callInvite = new CallInvite(target, callerId);
+
+        logger.LogInformation("Adding participant {target}", target.PhoneNumber);
+
         await client.GetCallConnection(eventBase.CallConnectionId).AddParticipantAsync(callInvite);
     }
 
@@ -63,6 +66,9 @@ app.MapPost("api/callbacks", async (CloudEvent[] events, CallAutomationClient cl
             DtmfTone.Four,
         };
         var sendDtmfTonesOptions = new SendDtmfTonesOptions(tones, target);
+
+        logger.LogInformation("Sending DTMF tones to {target}", target.PhoneNumber);
+        
         await client.GetCallConnection(eventBase.CallConnectionId).GetCallMedia().SendDtmfTonesAsync(sendDtmfTonesOptions);
     }
 });

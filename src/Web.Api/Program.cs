@@ -1,20 +1,16 @@
-using Azure;
 using Azure.Communication;
 using Azure.Communication.CallAutomation;
 using Azure.Communication.Rooms;
 using Azure.Messaging;
 using JasonShave.AzureStorage.QueueService.Extensions;
-using Microsoft.AspNetCore.Http.Features;
-using Microsoft.AspNetCore.Mvc;
 using Web.Api;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddHostedService<AnswerCallWorker>();
-
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+builder.Services.AddHostedService<AnswerCallWorker>();
 builder.Services.AddSingleton(new CallAutomationClient(builder.Configuration["Acs:ConnectionString"]));
 builder.Services.AddSingleton(new RoomsClient(builder.Configuration["Acs:ConnectionString"]));
 

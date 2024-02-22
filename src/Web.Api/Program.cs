@@ -3,6 +3,7 @@ using Azure.Communication.CallAutomation;
 using Azure.Communication.Rooms;
 using Azure.Messaging;
 using JasonShave.AzureStorage.QueueService.Extensions;
+using Microsoft.AspNetCore.Mvc;
 using Web.Api;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -71,6 +72,59 @@ app.MapPost("api/callbacks", async (CloudEvent[] events, CallAutomationClient cl
         
         await client.GetCallConnection(eventBase.CallConnectionId).GetCallMedia().SendDtmfTonesAsync(sendDtmfTonesOptions);
     }
+});
+
+app.MapPost("api/calls", async (CreateCallRequest command, CallAutomationClient client, CallingConfiguration callingConfiguration) =>
+{
+    CallInvite? callInvite = null;
+
+    var target = CommunicationIdentifier.FromRawId(command.TargetIdentity);
+    if (target is PhoneNumberIdentifier phoneNumber)
+    {
+        // need to set caller ID on PSTN scenario
+        callInvite = new CallInvite(phoneNumber, new PhoneNumberIdentifier(callingConfiguration.CallerId));
+    }
+    
+    if (target is CommunicationUserIdentifier userId)
+    {
+        callInvite = new CallInvite(userId);
+    }
+
+    var createCallOptions = new CreateCallOptions(callInvite, callingConfiguration.CallbackUri);
+    var result = await client.CreateCallAsync(createCallOptions);
+
+    return Results.Ok(result.Value);
+});
+
+app.MapPost("api/calls/{callConnectionId}/participant", async ([FromRoute] string callConnectionId, AddParticipantRequest request, CallAutomationClient client, CallingConfiguration callingConfiguration) =>
+{
+    CallInvite? callInvite = null;
+    var target = CommunicationIdentifier.FromRawId(request.TargetIdentity);
+    if (target is PhoneNumberIdentifier phoneNumber)
+    {
+        // need to set caller ID on PSTN scenario
+        callInvite = new CallInvite(phoneNumber, new PhoneNumberIdentifier(callingConfiguration.CallerId));
+    }
+    
+    if (target is CommunicationUserIdentifier userId)
+    {
+        callInvite = new CallInvite(userId);
+    }
+
+    await client.GetCallConnection(callConnectionId).AddParticipantAsync(callInvite);
+});
+
+app.MapPost("api/calls/{callConnectionId}/participant:sendDtmf", async ([FromRoute] string callConnectionId, SendDtmfTonesRequest request, CallAutomationClient client) =>
+{
+    var target = CommunicationIdentifier.FromRawId(request.TargetIdentity);
+    var tones = new List<DtmfTone>();
+    foreach (var item in request.DtmfTones)
+    {
+        tones.Add(item.ConvertToDtmfTone());
+    }
+
+    var sendDtmfTonesOptions = new SendDtmfTonesOptions(tones, target);
+    await client.GetCallConnection(callConnectionId).GetCallMedia().SendDtmfTonesAsync(sendDtmfTonesOptions);
 });
 
 app.AddRoomsApiMappings();

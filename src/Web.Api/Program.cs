@@ -20,6 +20,7 @@ var callbackHost = $"{builder.Configuration["Acs:CallbackUri"] ?? builder.Config
 builder.Services.AddSingleton(new CallingConfiguration()
 {
     CallbackUri = new Uri(callbackHost),
+    CognitiveServicesUri = new Uri(builder.Configuration["Acs:CognitiveServicesUri"]),
     Target = builder.Configuration["PhoneNumbers:Target"],
     CallerId = builder.Configuration["PhoneNumbers:CallerId"],
 });
@@ -57,23 +58,22 @@ app.MapPost("api/callbacks", async (CloudEvent[] events, CallAutomationClient cl
         await client.GetCallConnection(callConnected.CallConnectionId).AddParticipantAsync(callInvite);
     }
 
-    // if (eventBase is AddParticipantSucceeded)
-    // {
-    //     // send DTMF tones to PSTN participant
-    //     var target = new PhoneNumberIdentifier(callingConfiguration.Target);
-    //     var tones = new List<DtmfTone>()
-    //     {
-    //         DtmfTone.One,
-    //         DtmfTone.Two,
-    //         DtmfTone.Three,
-    //         DtmfTone.Four,
-    //     };
-    //     var sendDtmfTonesOptions = new SendDtmfTonesOptions(tones, target);
+    if (eventBase is AddParticipantSucceeded)
+    {
+        // send DTMF tones to PSTN participant
+        var target = new PhoneNumberIdentifier(callingConfiguration.Target);
+        var tones = new List<DtmfTone>()
+        {
+            DtmfTone.One,
+            DtmfTone.Two,
+            DtmfTone.Asterisk,
+            DtmfTone.Seven,
+        };
+        var sendDtmfTonesOptions = new SendDtmfTonesOptions(tones, target);
 
-    //     logger.LogInformation("Sending DTMF tones to {target}", target.PhoneNumber);
-        
-    //     await client.GetCallConnection(eventBase.CallConnectionId).GetCallMedia().SendDtmfTonesAsync(sendDtmfTonesOptions);
-    // }
+        logger.LogInformation("Sending DTMF tones to {target}", target.PhoneNumber);
+        await client.GetCallConnection(eventBase.CallConnectionId).GetCallMedia().SendDtmfTonesAsync(sendDtmfTonesOptions);
+    }
 });
 
 app.MapPost("api/calls", async (CreateCallRequest request, CallAutomationClient client, CallingConfiguration callingConfiguration) =>
@@ -99,7 +99,11 @@ app.MapPost("api/calls", async (CreateCallRequest request, CallAutomationClient 
 
     var createCallOptions = new CreateCallOptions(callInvite, callingConfiguration.CallbackUri)
     {
-        OperationContext = "outbound-call"
+        OperationContext = "outbound-call",
+        CallIntelligenceOptions = new CallIntelligenceOptions()
+        {
+            CognitiveServicesEndpoint = callingConfiguration.CognitiveServicesUri
+        }
     };
     var result = await client.CreateCallAsync(createCallOptions);
 
@@ -135,6 +139,18 @@ app.MapPost("api/calls/{callConnectionId}/participant:sendDtmf", async ([FromRou
 
     var sendDtmfTonesOptions = new SendDtmfTonesOptions(tones, target);
     await client.GetCallConnection(callConnectionId).GetCallMedia().SendDtmfTonesAsync(sendDtmfTonesOptions);
+});
+
+app.MapPost("/api/calls/{callConnectionId}/media:tts", async ([FromRoute] string callConnectionId, TextToSpeechRequest request, CallAutomationClient client) =>
+{
+    var target = CommunicationIdentifier.FromRawId(request.TargetIdentity);
+    var textSource = new TextSource(request.TextToSpeak)
+    {
+        VoiceName = "en-US-JasonNeural",
+    };
+    var playOptions = new PlayOptions(textSource, new List<CommunicationIdentifier>(){target});
+
+    await client.GetCallConnection(callConnectionId).GetCallMedia().PlayAsync(playOptions);
 });
 
 app.AddRoomsApiMappings();

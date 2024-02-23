@@ -12,18 +12,18 @@ public class AnswerCallWorker : BackgroundService
 {
     private readonly AzureStorageQueueClient _azureStorageQueueClient;
     private readonly CallAutomationClient _callAutomationClient;
-    private readonly CallingConfiguration _callbackConfiguration;
+    private readonly CallingConfiguration _callingConfiguration;
     private readonly ILogger<AnswerCallWorker> _logger;
 
     public AnswerCallWorker(
         IQueueClientFactory queueClientFactory,
         CallAutomationClient callAutomationClient,
-        CallingConfiguration callbackConfiguration,
+        CallingConfiguration callingConfiguration,
         ILogger<AnswerCallWorker> logger)
     {
         _azureStorageQueueClient = queueClientFactory.GetQueueClient();
         _callAutomationClient = callAutomationClient;
-        _callbackConfiguration = callbackConfiguration;
+        _callingConfiguration = callingConfiguration;
         _logger = logger;
     }
 
@@ -41,9 +41,13 @@ public class AnswerCallWorker : BackgroundService
     private async ValueTask HandleMessage(CloudEvent? cloudEvent)
     {
         var incomingCall = JsonSerializer.Deserialize<IncomingCall>(cloudEvent?.Data);
-        var answerCallOptions = new AnswerCallOptions(incomingCall?.IncomingCallContext, _callbackConfiguration.CallbackUri)
+        var answerCallOptions = new AnswerCallOptions(incomingCall?.IncomingCallContext, _callingConfiguration.CallbackUri)
         {
-            OperationContext = "inbound-call"
+            OperationContext = "inbound-call",
+            CallIntelligenceOptions = new CallIntelligenceOptions()
+            {
+                CognitiveServicesEndpoint = _callingConfiguration.CognitiveServicesUri
+            }
         };
         
         _logger.LogInformation("Answering call with callback URI {callbackUri} and correlationID: {correlationId}", answerCallOptions.CallbackUri.AbsoluteUri, incomingCall?.CorrelationId);

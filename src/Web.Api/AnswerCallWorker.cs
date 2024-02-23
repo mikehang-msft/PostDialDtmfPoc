@@ -41,7 +41,10 @@ public class AnswerCallWorker : BackgroundService
     private async ValueTask HandleMessage(CloudEvent? cloudEvent)
     {
         var incomingCall = JsonSerializer.Deserialize<IncomingCall>(cloudEvent?.Data);
-        var answerCallOptions = new AnswerCallOptions(incomingCall?.IncomingCallContext, _callbackConfiguration.CallbackUri);
+        var answerCallOptions = new AnswerCallOptions(incomingCall?.IncomingCallContext, _callbackConfiguration.CallbackUri)
+        {
+            OperationContext = "inbound-call"
+        };
         
         _logger.LogInformation("Answering call with callback URI {callbackUri} and correlationID: {correlationId}", answerCallOptions.CallbackUri.AbsoluteUri, incomingCall?.CorrelationId);
         

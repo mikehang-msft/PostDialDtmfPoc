@@ -12,6 +12,7 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 builder.Services.AddHostedService<AnswerCallWorker>();
+
 builder.Services.AddSingleton(new CallAutomationClient(builder.Configuration["Acs:ConnectionString"]));
 builder.Services.AddSingleton(new RoomsClient(builder.Configuration["Acs:ConnectionString"]));
 
@@ -42,8 +43,9 @@ app.UseHttpsRedirection();
 app.MapPost("api/callbacks", async (CloudEvent[] events, CallAutomationClient client, CallingConfiguration callingConfiguration, ILogger<Program> logger) =>
 {
     CallAutomationEventBase eventBase = CallAutomationEventParser.Parse(events.FirstOrDefault());
+    logger.LogInformation("Received callback {eventType}", eventBase.GetType());
 
-    if (eventBase is CallConnected)
+    if (eventBase is CallConnected callConnected && eventBase.OperationContext == "inbound-call")
     {
         // place outbound PSTN call
         var target = new PhoneNumberIdentifier(callingConfiguration.Target);
@@ -52,33 +54,33 @@ app.MapPost("api/callbacks", async (CloudEvent[] events, CallAutomationClient cl
 
         logger.LogInformation("Adding participant {target}", target.PhoneNumber);
 
-        await client.GetCallConnection(eventBase.CallConnectionId).AddParticipantAsync(callInvite);
+        await client.GetCallConnection(callConnected.CallConnectionId).AddParticipantAsync(callInvite);
     }
 
-    if (eventBase is AddParticipantSucceeded)
-    {
-        // send DTMF tones to PSTN participant
-        var target = new PhoneNumberIdentifier(callingConfiguration.Target);
-        var tones = new List<DtmfTone>()
-        {
-            DtmfTone.One,
-            DtmfTone.Two,
-            DtmfTone.Three,
-            DtmfTone.Four,
-        };
-        var sendDtmfTonesOptions = new SendDtmfTonesOptions(tones, target);
+    // if (eventBase is AddParticipantSucceeded)
+    // {
+    //     // send DTMF tones to PSTN participant
+    //     var target = new PhoneNumberIdentifier(callingConfiguration.Target);
+    //     var tones = new List<DtmfTone>()
+    //     {
+    //         DtmfTone.One,
+    //         DtmfTone.Two,
+    //         DtmfTone.Three,
+    //         DtmfTone.Four,
+    //     };
+    //     var sendDtmfTonesOptions = new SendDtmfTonesOptions(tones, target);
 
-        logger.LogInformation("Sending DTMF tones to {target}", target.PhoneNumber);
+    //     logger.LogInformation("Sending DTMF tones to {target}", target.PhoneNumber);
         
-        await client.GetCallConnection(eventBase.CallConnectionId).GetCallMedia().SendDtmfTonesAsync(sendDtmfTonesOptions);
-    }
+    //     await client.GetCallConnection(eventBase.CallConnectionId).GetCallMedia().SendDtmfTonesAsync(sendDtmfTonesOptions);
+    // }
 });
 
-app.MapPost("api/calls", async (CreateCallRequest command, CallAutomationClient client, CallingConfiguration callingConfiguration) =>
+app.MapPost("api/calls", async (CreateCallRequest request, CallAutomationClient client, CallingConfiguration callingConfiguration) =>
 {
     CallInvite? callInvite = null;
 
-    var target = CommunicationIdentifier.FromRawId(command.TargetIdentity);
+    var target = CommunicationIdentifier.FromRawId(request.TargetIdentity);
     if (target is PhoneNumberIdentifier phoneNumber)
     {
         // need to set caller ID on PSTN scenario
@@ -90,7 +92,15 @@ app.MapPost("api/calls", async (CreateCallRequest command, CallAutomationClient 
         callInvite = new CallInvite(userId);
     }
 
-    var createCallOptions = new CreateCallOptions(callInvite, callingConfiguration.CallbackUri);
+    if (target is MicrosoftTeamsUserIdentifier teamsUser)
+    {
+        callInvite = new CallInvite(teamsUser);
+    }
+
+    var createCallOptions = new CreateCallOptions(callInvite, callingConfiguration.CallbackUri)
+    {
+        OperationContext = "outbound-call"
+    };
     var result = await client.CreateCallAsync(createCallOptions);
 
     return Results.Ok(result.Value);

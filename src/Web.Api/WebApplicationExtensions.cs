@@ -9,7 +9,7 @@ public static class WebApplicationExtensions
 {
     public static WebApplication AddRoomsApiMappings(this WebApplication app)
     {
-        app.MapPost("api/room", async (IEnumerable<string>? participants, RoomsClient roomsClient) =>
+        app.MapPost("api/room", async ([FromBody] IEnumerable<string>? participants, RoomsClient roomsClient) =>
         {
             var roomsParticipants = new List<RoomParticipant>();
             foreach(var participant in participants)
@@ -20,7 +20,15 @@ public static class WebApplicationExtensions
                 });
             }
 
-            CommunicationRoom room = await roomsClient.CreateRoomAsync(null, null, roomsParticipants);
+            CreateRoomOptions createRoomOptions = new CreateRoomOptions()
+            {
+                ValidFrom = DateTimeOffset.UtcNow,
+                ValidUntil = DateTimeOffset.UtcNow.AddDays(30),
+                PstnDialOutEnabled = true,
+                Participants = roomsParticipants,
+            };
+
+            CommunicationRoom room = await roomsClient.CreateRoomAsync(createRoomOptions);
             return Results.Ok(room);
         });
 
@@ -34,6 +42,7 @@ public static class WebApplicationExtensions
                     Role = ParticipantRole.Presenter
                 });
             }
+            
             var response = await roomsClient.AddOrUpdateParticipantsAsync(roomId, roomsParticipants);
             return Results.Ok(response);
         });

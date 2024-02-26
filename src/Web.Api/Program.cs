@@ -20,7 +20,6 @@ var callbackHost = $"{builder.Configuration["Acs:CallbackUri"] ?? builder.Config
 builder.Services.AddSingleton(new CallingConfiguration()
 {
     CallbackUri = new Uri(callbackHost),
-    CognitiveServicesUri = new Uri(builder.Configuration["Acs:CognitiveServicesUri"]),
     Target = builder.Configuration["PhoneNumbers:Target"],
     CallerId = builder.Configuration["PhoneNumbers:CallerId"],
 });
@@ -139,18 +138,6 @@ app.MapPost("api/calls/{callConnectionId}/participant:sendDtmf", async ([FromRou
 
     var sendDtmfTonesOptions = new SendDtmfTonesOptions(tones, target);
     await client.GetCallConnection(callConnectionId).GetCallMedia().SendDtmfTonesAsync(sendDtmfTonesOptions);
-});
-
-app.MapPost("/api/calls/{callConnectionId}/media:tts", async ([FromRoute] string callConnectionId, TextToSpeechRequest request, CallAutomationClient client) =>
-{
-    var target = CommunicationIdentifier.FromRawId(request.TargetIdentity);
-    var textSource = new TextSource(request.TextToSpeak)
-    {
-        VoiceName = "en-US-JasonNeural",
-    };
-    var playOptions = new PlayOptions(textSource, new List<CommunicationIdentifier>(){target});
-
-    await client.GetCallConnection(callConnectionId).GetCallMedia().PlayAsync(playOptions);
 });
 
 app.AddRoomsApiMappings();

@@ -83,7 +83,10 @@ app.MapPost("api/calls", async (CreateCallRequest request, CallAutomationClient 
     if (target is PhoneNumberIdentifier phoneNumber)
     {
         // need to set caller ID on PSTN scenario
-        callInvite = new CallInvite(phoneNumber, new PhoneNumberIdentifier(callingConfiguration.CallerId));
+        callInvite = new CallInvite(phoneNumber, new PhoneNumberIdentifier(callingConfiguration.CallerId))
+        {
+            SourceDisplayName = "Interpreter",
+        };
     }
     
     if (target is CommunicationUserIdentifier userId)

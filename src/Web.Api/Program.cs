@@ -52,7 +52,7 @@ app.MapPost("api/callbacks", async (CloudEvent[] events, CallAutomationClient cl
         var callerId = new PhoneNumberIdentifier(callingConfiguration.CallerId);
         var callInvite = new CallInvite(target, callerId);
 
-        logger.LogInformation("Adding participant {target}", target.PhoneNumber);
+        logger.LogInformation("Adding participant {target} to callId {callId}", target.PhoneNumber, eventBase.CallConnectionId);
 
         await client.GetCallConnection(callConnected.CallConnectionId).AddParticipantAsync(callInvite);
     }
@@ -65,12 +65,11 @@ app.MapPost("api/callbacks", async (CloudEvent[] events, CallAutomationClient cl
         {
             DtmfTone.One,
             DtmfTone.Two,
-            DtmfTone.Asterisk,
             DtmfTone.Seven,
         };
         var sendDtmfTonesOptions = new SendDtmfTonesOptions(tones, target);
 
-        logger.LogInformation("Sending DTMF tones to {target}", target.PhoneNumber);
+        logger.LogInformation("Sending DTMF tones to {target} to callId {callId}", target.PhoneNumber, eventBase.CallConnectionId);
         await client.GetCallConnection(eventBase.CallConnectionId).GetCallMedia().SendDtmfTonesAsync(sendDtmfTonesOptions);
     }
 });

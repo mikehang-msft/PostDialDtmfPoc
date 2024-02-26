@@ -32,31 +32,23 @@ public static class WebApplicationExtensions
             return Results.Ok(room);
         });
 
-        app.MapPost("api/room/{roomId}/participants", async ([FromQuery]string roomId, [FromBody]IEnumerable<string> participants, RoomsClient roomsClient) =>
-        {
-            var roomsParticipants = new List<RoomParticipant>();
-            foreach(var participant in participants)
-            {
-                roomsParticipants.Add(new RoomParticipant(new CommunicationUserIdentifier(participant))
-                {
-                    Role = ParticipantRole.Presenter
-                });
-            }
-            
-            var response = await roomsClient.AddOrUpdateParticipantsAsync(roomId, roomsParticipants);
-            return Results.Ok(response);
-        });
-
-        app.MapGet("/api/room", (RoomsClient roomsClient) =>
-        {
-            var rooms = roomsClient.GetRoomsAsync();
-            return ProcessData(rooms);
-        });
-
         app.MapGet("/api/room/{roomId}", (string roomId, RoomsClient roomsClient) =>
         {
             var response = roomsClient.GetRoomAsync(roomId);
             return Results.Ok(response.Result);
+        });
+
+        app.MapGet("/api/room/{roomId}/participants", async (string roomId, RoomsClient roomsClient) =>
+        {
+            List<RoomParticipant> roomParticipants = new List<RoomParticipant>();
+            // Get list of participants in room
+            AsyncPageable<RoomParticipant> existingParticipants = roomsClient.GetParticipantsAsync(roomId);
+            await foreach (RoomParticipant participant in existingParticipants)
+            {
+                roomParticipants.Add(participant);
+            }
+
+            return Results.Ok(roomParticipants);
         });
 
         return app;

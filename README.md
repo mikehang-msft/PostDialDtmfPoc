@@ -1,4 +1,14 @@
 # PostDialDtmfPoc
+**Overview**
+
+This proof of concept (POC) is aimed to demonstrates two capabilities 
+1. Ability to dial out to a PSTN number and then follow up with DTMF tones 
+2. Ability to announce to a PSTN participant when they get muted and unmute PSTN user using a back-end service when they press *6. This POC leverages ACS Rooms call and Call Automation capabilities. 
+
+The following components are used to run a full end to end workflows: 
+1. PostDialDtmfPOC Service (this project): A server-side service listens for incoming call events and triggers call automation client to dial out to a PSTN number, sends a DTMF tones and handles mute/unmute for the remote PSTN user. 
+2. ACS Web Calling SDK app: this a sample client-side calling app allows participants to join a Room call and add other participants into the call. This app is available to public and can be found in [this tutorial](https://learn.microsoft.com/en-us/samples/azure-samples/communication-services-web-calling-tutorial/acs-calling-tutorial/). 
+
 **Prerequisites**
 - [ ] Visual Studio 2022 or Visual Source Code 1.86.0 or higher 
 - [ ] .NET 8 or higher 

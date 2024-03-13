@@ -29,6 +29,7 @@ Open a terminal or command prompt, and cd into a folder where you would like to 
 - _Acs:ConnectionString_: specify connection string to ACS Resource used in this POC.
 - _Acs:CallbackUri_: specify URI that Call Automation client will execute a callback via the URI after accepting the call. This piece of code is implemented in AnswerCallWorker.HandleMessage() to handle dialing out to PSTN number and sending DTMF tones. In this POC, we are using Dev Tunnel to generate a public callback URI. Please refer to the following article for configuring [Dev Tunnels in Visual Studio 2022](https://learn.microsoft.com/en-us/aspnet/core/test/dev-tunnels?view=aspnetcore-8.0).
 - _Storage.ConnectionString_: specify connection string Azure Storage Queue.
+- _Storage.QueueName_: specify name of the Azure Storage Queue.
 - _PhoneNumbers.Target_: specify a valid target phone number.
 - _PhoneNumbers.CallerId_: specify phone number provisioned in the ACS resource.
 

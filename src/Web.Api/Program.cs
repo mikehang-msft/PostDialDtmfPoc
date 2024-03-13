@@ -27,7 +27,7 @@ builder.Services.AddSingleton(new CallingConfiguration()
 builder.Services.AddAzureStorageQueueClient(x => x.AddDefaultClient(y => 
 {
     y.ConnectionString = builder.Configuration["Storage:ConnectionString"];
-    y.QueueName = "events-incomingcall";
+    y.QueueName = builder.Configuration["Storage:QueueName"];
 }));
 
 var app = builder.Build();

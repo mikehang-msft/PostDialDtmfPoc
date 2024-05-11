@@ -3,7 +3,9 @@ using Azure.Communication.CallAutomation;
 using Azure.Communication.Rooms;
 using Azure.Messaging;
 using JasonShave.AzureStorage.QueueService.Extensions;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Mvc;
+using System.Collections.Concurrent;
 using Web.Api;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -17,12 +19,6 @@ builder.Services.AddSingleton(new CallAutomationClient(builder.Configuration["Ac
 builder.Services.AddSingleton(new RoomsClient(builder.Configuration["Acs:ConnectionString"]));
 
 var callbackHost = $"{builder.Configuration["Acs:CallbackUri"] ?? builder.Configuration["VS_TUNNEL_URL"]}" + "/api/callbacks";
-builder.Services.AddSingleton(new CallingConfiguration()
-{
-    CallbackUri = new Uri(callbackHost),
-    Target = builder.Configuration["PhoneNumbers:Target"],
-    CallerId = builder.Configuration["PhoneNumbers:CallerId"],
-});
 
 builder.Services.AddAzureStorageQueueClient(x => x.AddDefaultClient(y => 
 {
@@ -40,106 +36,86 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
-app.MapPost("api/callbacks", async (CloudEvent[] events, CallAutomationClient client, CallingConfiguration callingConfiguration, ILogger<Program> logger) =>
+app.MapPost("api/recording/{serverCallId}/start", async ([FromRoute] string serverCallId, CallAutomationClient client, CallingConfiguration callingConfiguration, ILogger<Program> logger) =>
 {
-    CallAutomationEventBase eventBase = CallAutomationEventParser.Parse(events.FirstOrDefault());
-    logger.LogInformation("Received callback {eventType}", eventBase.GetType());
-
-    if (eventBase is CallConnected callConnected && eventBase.OperationContext == "inbound-call")
+    try
     {
-        // place outbound PSTN call
-        var target = new PhoneNumberIdentifier(callingConfiguration.Target);
-        var callerId = new PhoneNumberIdentifier(callingConfiguration.CallerId);
-        var callInvite = new CallInvite(target, callerId);
+        StartRecordingOptions recordingOptions = new StartRecordingOptions(new ServerCallLocator(serverCallId));
+        recordingOptions.RecordingChannel = RecordingChannel.Mixed;
+        recordingOptions.RecordingContent = RecordingContent.AudioVideo;
+        recordingOptions.RecordingFormat = RecordingFormat.Mp4;
 
-        logger.LogInformation("Adding participant {target} to callId {callId}", target.PhoneNumber, eventBase.CallConnectionId);
+        var startRecordingResponse = await client.GetCallRecording()
+            .StartAsync(recordingOptions).ConfigureAwait(false);
 
-        await client.GetCallConnection(callConnected.CallConnectionId).AddParticipantAsync(callInvite);
+        var recordingId = startRecordingResponse.Value.RecordingId;
+
+        logger.LogInformation($"Recording started with recording id: {startRecordingResponse.Value.RecordingId} " +
+            $"recording state: {startRecordingResponse.Value.RecordingState}");
     }
-
-    if (eventBase is AddParticipantSucceeded)
+    catch (Exception ex)
     {
-        // send DTMF tones to PSTN participant
-        var target = new PhoneNumberIdentifier(callingConfiguration.Target);
-        var tones = new List<DtmfTone>()
-        {
-            DtmfTone.One,
-            DtmfTone.Two,
-            DtmfTone.Seven,
-        };
-        var sendDtmfTonesOptions = new SendDtmfTonesOptions(tones, target);
-
-        logger.LogInformation("Sending DTMF tones to {target} to callId {callId}", target.PhoneNumber, eventBase.CallConnectionId);
-        await client.GetCallConnection(eventBase.CallConnectionId).GetCallMedia().SendDtmfTonesAsync(sendDtmfTonesOptions);
+        logger.LogError($"Error start a recording {ex.ToString()}");
     }
 });
 
-app.MapPost("api/calls", async (CreateCallRequest request, CallAutomationClient client, CallingConfiguration callingConfiguration) =>
+app.MapPost("api/recording/{recordingId}/stop", async ([FromRoute] string recordingId, CallAutomationClient client, CallingConfiguration callingConfiguration, ILogger<Program> logger) =>
 {
-    CallInvite? callInvite = null;
-
-    var target = CommunicationIdentifier.FromRawId(request.TargetIdentity);
-    if (target is PhoneNumberIdentifier phoneNumber)
+    try
     {
-        // need to set caller ID on PSTN scenario
-        callInvite = new CallInvite(phoneNumber, new PhoneNumberIdentifier(callingConfiguration.CallerId))
-        {
-            SourceDisplayName = "Interpreter",
-        };
+        // Stop recording content 
+        var stopResponse = await client.GetCallRecording().StopAsync(recordingId).ConfigureAwait(false);
+        logger.LogInformation($"Recording Stopped: {stopResponse.Status}");
     }
-    
-    if (target is CommunicationUserIdentifier userId)
+    catch (Exception ex)
     {
-        callInvite = new CallInvite(userId);
+        logger.LogError($"Error stop a recording {ex.ToString()}");
     }
-
-    if (target is MicrosoftTeamsUserIdentifier teamsUser)
-    {
-        callInvite = new CallInvite(teamsUser);
-    }
-
-    var createCallOptions = new CreateCallOptions(callInvite, callingConfiguration.CallbackUri)
-    {
-        OperationContext = "outbound-call",
-        CallIntelligenceOptions = new CallIntelligenceOptions()
-        {
-            CognitiveServicesEndpoint = callingConfiguration.CognitiveServicesUri
-        }
-    };
-    var result = await client.CreateCallAsync(createCallOptions);
-
-    return Results.Ok(result.Value);
 });
 
-app.MapPost("api/calls/{callConnectionId}/participant", async ([FromRoute] string callConnectionId, AddParticipantRequest request, CallAutomationClient client, CallingConfiguration callingConfiguration) =>
+app.MapPost("api/recording/{recordingId}/pause", async ([FromRoute] string recordingId, CallAutomationClient client, CallingConfiguration callingConfiguration, ILogger<Program> logger) =>
 {
-    CallInvite? callInvite = null;
-    var target = CommunicationIdentifier.FromRawId(request.TargetIdentity);
-    if (target is PhoneNumberIdentifier phoneNumber)
+    try
     {
-        // need to set caller ID on PSTN scenario
-        callInvite = new CallInvite(phoneNumber, new PhoneNumberIdentifier(callingConfiguration.CallerId));
+        // Pause recording content 
+        var pauseResponse = await client.GetCallRecording().PauseAsync(recordingId).ConfigureAwait(false);
+        logger.LogInformation($"Recording Paused: {pauseResponse.Status}");
     }
-    
-    if (target is CommunicationUserIdentifier userId)
+    catch (Exception ex)
     {
-        callInvite = new CallInvite(userId);
+        logger.LogError($"Error stop a recording {ex.ToString()}");
     }
-
-    await client.GetCallConnection(callConnectionId).AddParticipantAsync(callInvite);
 });
 
-app.MapPost("api/calls/{callConnectionId}/participant:sendDtmf", async ([FromRoute] string callConnectionId, SendDtmfTonesRequest request, CallAutomationClient client) =>
+app.MapPost("api/recording/{recordingId}/resume", async ([FromRoute] string recordingId, CallAutomationClient client, CallingConfiguration callingConfiguration, ILogger<Program> logger) =>
 {
-    var target = CommunicationIdentifier.FromRawId(request.TargetIdentity);
-    var tones = new List<DtmfTone>();
-    foreach (var item in request.DtmfTones)
+    try
     {
-        tones.Add(item.ConvertToDtmfTone());
+        // Resume recording content 
+        var resumeResponse = await client.GetCallRecording().ResumeAsync(recordingId).ConfigureAwait(false);
+        logger.LogInformation($"Recording Resumed: {resumeResponse.Status}");
     }
+    catch (Exception ex)
+    {
+        logger.LogError($"Error stop a recording {ex.ToString()}");
+    }
+});
 
-    var sendDtmfTonesOptions = new SendDtmfTonesOptions(tones, target);
-    await client.GetCallConnection(callConnectionId).GetCallMedia().SendDtmfTonesAsync(sendDtmfTonesOptions);
+app.MapPost("api/recording/{recordingId}/GetRecordingState", async ([FromRoute] string recordingId, CallAutomationClient client, CallingConfiguration callingConfiguration, ILogger<Program> logger) =>
+{
+    try
+    {
+        // Resume recording content 
+        var stateResponse = await client.GetCallRecording().GetStateAsync(recordingId).ConfigureAwait(false);
+        logger.LogInformation($"Recording state: {stateResponse}");
+
+        return stateResponse;
+    }
+    catch (Exception ex)
+    {
+        logger.LogError($"Error stop a recording {ex.ToString()}");
+        return null;
+    }
 });
 
 app.AddRoomsApiMappings();
